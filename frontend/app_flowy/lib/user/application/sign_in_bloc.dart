@@ -1,15 +1,16 @@
-import 'package:app_flowy/user/infrastructure/repos/auth_repo.dart';
+import 'package:app_flowy/user/application/auth_service.dart';
 import 'package:dartz/dartz.dart';
+import 'package:flowy_sdk/protobuf/flowy-error-code/code.pb.dart';
 import 'package:flowy_sdk/protobuf/flowy-error/errors.pb.dart';
-import 'package:flowy_sdk/protobuf/flowy-user-data-model/protobuf.dart' show UserProfile, ErrorCode;
+import 'package:flowy_sdk/protobuf/flowy-user/protobuf.dart' show UserProfilePB;
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 part 'sign_in_bloc.freezed.dart';
 
 class SignInBloc extends Bloc<SignInEvent, SignInState> {
-  final AuthRepository authRepo;
-  SignInBloc(this.authRepo) : super(SignInState.initial()) {
+  final AuthService authService;
+  SignInBloc(this.authService) : super(SignInState.initial()) {
     on<SignInEvent>((event, emit) async {
       await event.map(
         signedInWithUserEmailAndPassword: (e) async {
@@ -31,7 +32,7 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
   Future<void> _performActionOnSignIn(SignInState state, Emitter<SignInState> emit) async {
     emit(state.copyWith(isSubmitting: true, emailError: none(), passwordError: none(), successOrFail: none()));
 
-    final result = await authRepo.signIn(
+    final result = await authService.signIn(
       email: state.email,
       password: state.password,
     );
@@ -54,21 +55,21 @@ class SignInBloc extends Bloc<SignInEvent, SignInState> {
 }
 
 @freezed
-abstract class SignInEvent with _$SignInEvent {
+class SignInEvent with _$SignInEvent {
   const factory SignInEvent.signedInWithUserEmailAndPassword() = SignedInWithUserEmailAndPassword;
   const factory SignInEvent.emailChanged(String email) = EmailChanged;
   const factory SignInEvent.passwordChanged(String password) = PasswordChanged;
 }
 
 @freezed
-abstract class SignInState with _$SignInState {
+class SignInState with _$SignInState {
   const factory SignInState({
     String? email,
     String? password,
     required bool isSubmitting,
     required Option<String> passwordError,
     required Option<String> emailError,
-    required Option<Either<UserProfile, FlowyError>> successOrFail,
+    required Option<Either<UserProfilePB, FlowyError>> successOrFail,
   }) = _SignInState;
 
   factory SignInState.initial() => SignInState(

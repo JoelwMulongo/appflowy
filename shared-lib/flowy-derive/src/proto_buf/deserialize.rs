@@ -1,4 +1,4 @@
-use crate::{derive_cache::TypeCategory, proto_buf::util::*};
+use crate::proto_buf::util::*;
 use flowy_ast::*;
 use proc_macro2::{Span, TokenStream};
 
@@ -25,17 +25,31 @@ pub fn make_de_token_steam(ctxt: &Ctxt, ast: &ASTContainer) -> Option<TokenStrea
         impl std::convert::TryFrom<bytes::Bytes> for #struct_ident {
             type Error = ::protobuf::ProtobufError;
             fn try_from(bytes: bytes::Bytes) -> Result<Self, Self::Error> {
-                let mut pb: crate::protobuf::#pb_ty = ::protobuf::Message::parse_from_bytes(&bytes)?;
-                #struct_ident::try_from(&mut pb)
+                Self::try_from(&bytes)
             }
         }
 
-        impl std::convert::TryFrom<&mut crate::protobuf::#pb_ty> for #struct_ident {
+        impl std::convert::TryFrom<&bytes::Bytes> for #struct_ident {
             type Error = ::protobuf::ProtobufError;
-            fn try_from(pb: &mut crate::protobuf::#pb_ty) -> Result<Self, Self::Error> {
+            fn try_from(bytes: &bytes::Bytes) -> Result<Self, Self::Error> {
+                let pb: crate::protobuf::#pb_ty = ::protobuf::Message::parse_from_bytes(bytes)?;
+                Ok(#struct_ident::from(pb))
+            }
+        }
+
+        impl std::convert::TryFrom<&[u8]> for #struct_ident {
+            type Error = ::protobuf::ProtobufError;
+            fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
+                let pb: crate::protobuf::#pb_ty = ::protobuf::Message::parse_from_bytes(bytes)?;
+                Ok(#struct_ident::from(pb))
+            }
+        }
+
+        impl std::convert::From<crate::protobuf::#pb_ty> for #struct_ident {
+            fn from(mut pb: crate::protobuf::#pb_ty) -> Self {
                 let mut o = Self::default();
                 #(#build_take_fields)*
-                Ok(o)
+                o
             }
         }
     };
@@ -55,17 +69,14 @@ fn token_stream_for_one_of(ctxt: &Ctxt, field: &ASTField) -> Option<TokenStream>
         }
     }?;
     let bracketed_ty_info = ty_info.bracket_ty_info.as_ref().as_ref();
-
     let has_func = format_ident!("has_{}", ident.to_string());
-    // eprintln!("😁{:#?}", ty_info.primitive_ty);
-    // eprintln!("{:#?}", ty_info.bracket_ty_info);
     match ident_category(bracketed_ty_info.unwrap().ident) {
         TypeCategory::Enum => {
             let get_func = format_ident!("get_{}", ident.to_string());
-            let ty = ty_info.ty;
+            let ty = bracketed_ty_info.unwrap().ty;
             Some(quote! {
                 if pb.#has_func() {
-                    let enum_de_from_pb = #ty::try_from(&pb.#get_func()).unwrap();
+                    let enum_de_from_pb = #ty::from(&pb.#get_func());
                     o.#member = Some(enum_de_from_pb);
                 }
             })
@@ -99,7 +110,7 @@ fn token_stream_for_one_of(ctxt: &Ctxt, field: &ASTField) -> Option<TokenStream>
             let ty = bracketed_ty_info.unwrap().ty;
             Some(quote! {
                 if pb.#has_func() {
-                    let val = #ty::try_from(&mut pb.#take_func()).unwrap();
+                    let val = #ty::from(pb.#take_func());
                     o.#member=Some(val);
                 }
             })
@@ -133,7 +144,7 @@ fn token_stream_for_field(ctxt: &Ctxt, member: &syn::Member, ty: &syn::Type, is_
             Some(quote! {
                 let some_value = pb.#member.#take();
                 if some_value.is_some() {
-                    let struct_de_from_pb = #ty::try_from(&mut some_value.unwrap()).unwrap();
+                    let struct_de_from_pb = #ty::from(some_value.unwrap());
                     o.#member = struct_de_from_pb;
                 }
             })
@@ -142,7 +153,7 @@ fn token_stream_for_field(ctxt: &Ctxt, member: &syn::Member, ty: &syn::Type, is_
         TypeCategory::Enum => {
             let ty = ty_info.ty;
             Some(quote! {
-                let enum_de_from_pb = #ty::try_from(&pb.#member).unwrap();
+                let enum_de_from_pb = #ty::from(&pb.#member);
                  o.#member = enum_de_from_pb;
 
             })
@@ -187,7 +198,7 @@ fn token_stream_for_vec(ctxt: &Ctxt, member: &syn::Member, bracketed_type: &TyIn
             Some(quote! {
                 o.#member = pb.#take_ident()
                 .into_iter()
-                .map(|mut m| #ty::try_from(&mut m).unwrap())
+                .map(|m| #ty::from(m))
                 .collect();
             })
         }
@@ -207,17 +218,16 @@ fn token_stream_for_vec(ctxt: &Ctxt, member: &syn::Member, bracketed_type: &TyIn
     }
 }
 
-fn token_stream_for_map(ctxt: &Ctxt, member: &syn::Member, bracketed_type: &TyInfo) -> Option<TokenStream> {
+fn token_stream_for_map(ctxt: &Ctxt, member: &syn::Member, ty_info: &TyInfo) -> Option<TokenStream> {
     let ident = get_member_ident(ctxt, member)?;
-
     let take_ident = format_ident!("take_{}", ident.to_string());
-    let ty = bracketed_type.ty;
+    let ty = ty_info.ty;
 
-    match ident_category(bracketed_type.ident) {
+    match ident_category(ty_info.ident) {
         TypeCategory::Protobuf => Some(quote! {
              let mut m: std::collections::HashMap<String, #ty> = std::collections::HashMap::new();
-              pb.#take_ident().into_iter().for_each(|(k,mut v)| {
-                    m.insert(k.clone(), #ty::try_from(&mut v).unwrap());
+              pb.#take_ident().into_iter().for_each(|(k,v)| {
+                    m.insert(k.clone(), #ty::from(v));
               });
              o.#member = m;
         }),

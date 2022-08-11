@@ -1,3 +1,4 @@
+use crate::runtime::FlowyRuntime;
 use crate::{
     errors::{DispatchError, Error, InternalError},
     module::{as_module_map, Module, ModuleMap, ModuleRequest},
@@ -10,13 +11,14 @@ use futures_util::task::Context;
 use pin_project::pin_project;
 use std::{future::Future, sync::Arc};
 use tokio::macros::support::{Pin, Poll};
+
 pub struct EventDispatcher {
     module_map: ModuleMap,
-    runtime: tokio::runtime::Runtime,
+    runtime: FlowyRuntime,
 }
 
 impl EventDispatcher {
-    pub fn construct<F>(runtime: tokio::runtime::Runtime, module_factory: F) -> EventDispatcher
+    pub fn construct<F>(runtime: FlowyRuntime, module_factory: F) -> EventDispatcher
     where
         F: FnOnce() -> Vec<Module>,
     {
@@ -139,13 +141,14 @@ impl Service<DispatchContext> for DispatchService {
                 // print_module_map_info(&module_map);
                 match module_map.get(&request.event) {
                     Some(module) => {
+                        tracing::trace!("Handle event: {:?} by {:?}", &request.event, module.name);
                         let fut = module.new_service(());
                         let service_fut = fut.await?.call(request);
                         service_fut.await
                     }
                     None => {
                         let msg = format!("Can not find the event handler. {:?}", request);
-                        log::error!("{}", msg);
+                        tracing::error!("{}", msg);
                         Err(InternalError::HandleNotFound(msg).into())
                     }
                 }

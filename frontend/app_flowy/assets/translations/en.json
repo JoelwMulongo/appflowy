@@ -94,7 +94,14 @@
   },
   "tooltip": {
     "lightMode": "Switch to Light mode",
-    "darkMode": "Switch to Dark mode"
+    "darkMode": "Switch to Dark mode",
+    "openAsPage": "Open as a Page"
+  },
+  "notifications": {
+    "export": {
+      "markdown": "Exported Note To Markdown",
+      "path": "Documents/flowy"
+    }
   },
   "contactsPage": {
     "title": "Contacts",
@@ -135,11 +142,78 @@
     "menu": {
       "appearance": "Appearance",
       "language": "Language",
+      "user": "User",
       "open": "Open Settings"
     },
     "appearance": {
       "lightLabel": "Light Mode",
       "darkLabel": "Dark Mode"
+    }
+  },
+  "grid": {
+    "settings": {
+      "filter": "Filter",
+      "sortBy": "Sort by",
+      "Properties": "Properties"
+    },
+    "field": {
+      "hide": "Hide",
+      "insertLeft": "Insert Left",
+      "insertRight": "Insert Right",
+      "duplicate": "Duplicate",
+      "delete": "Delete",
+      "textFieldName": "Text",
+      "checkboxFieldName": "Checkbox",
+      "dateFieldName": "Date",
+      "numberFieldName": "Numbers",
+      "singleSelectFieldName": "Select",
+      "multiSelectFieldName": "Multiselect",
+      "urlFieldName": "URL",
+      "numberFormat": " Number format",
+      "dateFormat": " Date format",
+      "includeTime": " Include time",
+      "dateFormatFriendly": "Month Day,Year",
+      "dateFormatISO": "Year-Month-Day",
+      "dateFormatLocal": "Year/Month/Day",
+      "dateFormatUS": "Year/Month/Day",
+      "timeFormat": " Time format",
+      "invalidTimeFormat": "Invalid format",
+      "timeFormatTwelveHour": "12 hour",
+      "timeFormatTwentyFourHour": "24 hour",
+      "addSelectOption": "Add an option",
+      "optionTitle": "Options",
+      "addOption": "Add option",
+      "editProperty": "Edit property"
+    },
+    "row": {
+      "duplicate": "Duplicate",
+      "delete": "Delete",
+      "textPlaceholder": "Empty",
+      "copyProperty": "Copied property to clipboard"
+    },
+    "selectOption": {
+      "create": "Create",
+      "purpleColor": "Purple",
+      "pinkColor": "Pink",
+      "lightPinkColor": "Light Pink",
+      "orangeColor": "Orange",
+      "yellowColor": "Yellow",
+      "limeColor": "Lime",
+      "greenColor": "Green",
+      "aquaColor": "Aqua",
+      "blueColor": "Blue",
+      "deleteTag": "Delete tag",
+      "colorPannelTitle": "Colors",
+      "pannelTitle": "Select an option or create one",
+      "searchOption": "Search for an option"
+    },
+    "menuName": "Grid"
+  },
+  "document": {
+    "menuName": "Doc",
+    "date": {
+      "timeHintTextInTwelveHour": "12:00 AM",
+      "timeHintTextInTwentyFourHour": "12:00"
     }
   }
 }

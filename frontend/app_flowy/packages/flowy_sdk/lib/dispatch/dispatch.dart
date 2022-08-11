@@ -1,14 +1,10 @@
 import 'dart:ffi';
 import 'package:dartz/dartz.dart';
-import 'package:flowy_log/flowy_log.dart';
+import 'package:flowy_sdk/log.dart';
 // ignore: unnecessary_import
 import 'package:flowy_sdk/protobuf/dart-ffi/ffi_response.pb.dart';
-import 'package:flowy_sdk/protobuf/flowy-collaboration/document_info.pb.dart';
 import 'package:flowy_sdk/protobuf/flowy-error/errors.pb.dart';
-import 'package:flowy_sdk/protobuf/flowy-net/event.pb.dart';
 import 'package:flowy_sdk/protobuf/flowy-net/network_state.pb.dart';
-import 'package:flowy_sdk/protobuf/flowy-user/event_map.pb.dart';
-import 'package:flowy_sdk/protobuf/flowy-folder/event_map.pb.dart';
 import 'package:isolates/isolates.dart';
 import 'package:isolates/ports.dart';
 import 'package:ffi/ffi.dart';
@@ -17,18 +13,24 @@ import 'package:flutter/services.dart';
 import 'dart:async';
 import 'dart:typed_data';
 import 'package:flowy_sdk/ffi.dart' as ffi;
-import 'package:flowy_sdk/protobuf/flowy-user-data-model/protobuf.dart';
+import 'package:flowy_sdk/protobuf/flowy-user/protobuf.dart';
 import 'package:flowy_sdk/protobuf/dart-ffi/protobuf.dart';
-import 'package:flowy_sdk/protobuf/flowy-folder-data-model/protobuf.dart';
-import 'package:flowy_sdk/protobuf/flowy-collaboration/protobuf.dart';
+import 'package:flowy_sdk/protobuf/flowy-folder/protobuf.dart';
+import 'package:flowy_sdk/protobuf/flowy-text-block/protobuf.dart';
+import 'package:flowy_sdk/protobuf/flowy-grid/protobuf.dart';
+import 'package:flowy_sdk/protobuf/flowy-sync/protobuf.dart';
 
 // ignore: unused_import
-import 'package:flowy_sdk/protobuf/lib-infra/protobuf.dart';
 import 'package:protobuf/protobuf.dart';
 import 'dart:convert' show utf8;
+import '../protobuf/flowy-net/event_map.pb.dart';
 import 'error.dart';
 
-part 'code_gen.dart';
+part 'dart_event/flowy-folder/dart_event.dart';
+part 'dart_event/flowy-net/dart_event.dart';
+part 'dart_event/flowy-user/dart_event.dart';
+part 'dart_event/flowy-grid/dart_event.dart';
+part 'dart_event/flowy-text-block/dart_event.dart';
 
 enum FFIException {
   RequestIsEmpty,

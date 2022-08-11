@@ -30,16 +30,6 @@ class FlowyIconButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     Widget child = icon;
-
-    // if (onPressed == null) {
-    //   child = ColorFiltered(
-    //     colorFilter: ColorFilter.mode(
-    //       Colors.grey,
-    //       BlendMode.saturation,
-    //     ),
-    //     child: child,
-    //   );
-    // }
     final size = Size(width, height ?? width);
 
     assert(size.width > iconPadding.horizontal);
@@ -87,7 +77,7 @@ class FlowyDropdownButton extends StatelessWidget {
     return FlowyIconButton(
       width: 16,
       onPressed: onPressed,
-      icon: svg("home/drop_down_show"),
+      icon: svgWidget("home/drop_down_show"),
     );
   }
 }

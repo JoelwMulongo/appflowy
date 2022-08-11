@@ -13,7 +13,7 @@ use pin_project::pin_project;
 
 use crate::{
     errors::{DispatchError, InternalError},
-    module::{container::ModuleDataMap, Unit},
+    module::{container::ModuleDataMap, AppData},
     request::{payload::Payload, EventRequest, FromRequest},
     response::{EventResponse, Responder},
     service::{
@@ -22,6 +22,7 @@ use crate::{
     },
 };
 use futures_core::future::BoxFuture;
+use nanoid::nanoid;
 use std::sync::Arc;
 
 pub type ModuleMap = Arc<HashMap<Event, Arc<Module>>>;
@@ -75,7 +76,7 @@ impl Module {
     }
 
     pub fn data<D: 'static + Send + Sync>(mut self, data: D) -> Self {
-        Arc::get_mut(&mut self.module_data).unwrap().insert(Unit::new(data));
+        Arc::get_mut(&mut self.module_data).unwrap().insert(AppData::new(data));
 
         self
     }
@@ -118,7 +119,7 @@ impl ModuleRequest {
         E: Into<Event>,
     {
         Self {
-            id: uuid::Uuid::new_v4().to_string(),
+            id: nanoid!(6),
             event: event.into(),
             payload: Payload::None,
         }

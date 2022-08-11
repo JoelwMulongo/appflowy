@@ -14,13 +14,7 @@ where
     fn into_bytes(self) -> Result<Bytes, DispatchError> {
         match self.try_into() {
             Ok(data) => Ok(data),
-            Err(e) => {
-                // let system_err: DispatchError = InternalError::new(format!("{:?}",
-                // e)).into(); system_err.into()
-                // Err(format!("{:?}", e))
-
-                Err(InternalError::ProtobufError(format!("{:?}", e)).into())
-            }
+            Err(e) => Err(InternalError::ProtobufError(format!("{:?}", e)).into()),
         }
     }
 }
@@ -53,8 +47,17 @@ where
     T: std::convert::TryFrom<Bytes, Error = protobuf::ProtobufError>,
 {
     fn parse_from_bytes(bytes: Bytes) -> Result<Self, DispatchError> {
-        let data = T::try_from(bytes)?;
-        Ok(data)
+        match T::try_from(bytes) {
+            Ok(data) => Ok(data),
+            Err(e) => {
+                tracing::error!(
+                    "Parse payload to {} failed with error: {:?}",
+                    std::any::type_name::<T>(),
+                    e
+                );
+                Err(e.into())
+            }
+        }
     }
 }
 

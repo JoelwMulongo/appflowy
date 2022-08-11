@@ -1,6 +1,6 @@
 use bytes::Bytes;
-use error_code::ErrorCode;
 use flowy_derive::ProtoBuf;
+use flowy_error_code::ErrorCode;
 use lib_dispatch::prelude::{EventResponse, ResponseBuilder};
 use std::{convert::TryInto, fmt, fmt::Debug};
 
@@ -64,6 +64,8 @@ impl FlowyError {
     static_flowy_error!(name_empty, ErrorCode::UserNameIsEmpty);
     static_flowy_error!(user_id, ErrorCode::UserIdInvalid);
     static_flowy_error!(user_not_exist, ErrorCode::UserNotExist);
+    static_flowy_error!(text_too_long, ErrorCode::TextTooLong);
+    static_flowy_error!(invalid_data, ErrorCode::InvalidData);
 }
 
 impl std::convert::From<ErrorCode> for FlowyError {

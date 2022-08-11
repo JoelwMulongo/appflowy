@@ -20,12 +20,14 @@ You are in charge of your data and customizations.
 <p align="center">
     <a href="http://www.appflowy.io"><b>Website</b></a> •
     <a href="https://discord.gg/9Q2xaN37tV"><b>Discord</b></a> •
-    <a href="https://twitter.com/appflowy"><b>Twitter</b></a> 
-</p>  
+    <a href="https://twitter.com/appflowy"><b>Twitter</b></a>
+</p>
 
-<p align="center"><img src="https://github.com/AppFlowy-IO/appflowy/blob/main/doc/imgs/welcome.png" alt="The Open Source Alternative To Notion." width="1000px" /></p>
+<p align="center"><img src="https://user-images.githubusercontent.com/12026239/174754661-682980e4-e386-4685-bb6f-2da357390b61.png" alt="The Open Source Alternative To Notion." width="1000px" /></p>
+<p align="center"><img src="https://user-images.githubusercontent.com/12026239/174753177-98e4c899-2356-4137-bb42-374bba2b127b.png" alt="The Open Source Alternative To Notion." width="1000px" /></p>
 
 ## User Installation
+
 Please view the [documentation](https://appflowy.gitbook.io/docs/essential-documentation/install-appflowy/installation-methods) for OS specific installation instructions.
 
 ## Built With
@@ -36,14 +38,15 @@ Please view the [documentation](https://appflowy.gitbook.io/docs/essential-docum
 
 ## Stay Up-to-Date
 
-<p align="center"><img src="https://github.com/AppFlowy-IO/appflowy/blob/main/doc/imgs/howtostar.gif" alt="AppFlowy Github" width="1000px" /></p>
+<p align="center"><img src="https://github.com/AppFlowy-IO/appflowy/blob/main/doc/imgs/howtostar.gif" alt="AppFlowy Github - how to star the repo" width="100%" /></p>
 
 ## Getting Started with development
 Please view the [documentation](https://appflowy.gitbook.io/docs/essential-documentation/contribute-to-appflowy) for OS specific development instructions
 
 ## Roadmap
 
-[AppFlowy Roadmap](https://trello.com/b/NCyXCXXh/appflowy-roadmap)
+- [AppFlowy Roadmap ReadMe](https://appflowy.gitbook.io/docs/essential-documentation/roadmap)
+- [AppFlowy Public Roadmap](https://github.com/orgs/AppFlowy-IO/projects/5/views/12)
 
 If you'd like to propose a feature, submit an issue [here](https://github.com/AppFlowy-IO/appflowy/issues).
 

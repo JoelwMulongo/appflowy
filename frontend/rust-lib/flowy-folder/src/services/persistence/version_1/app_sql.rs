@@ -1,23 +1,19 @@
 use crate::entities::{
-    app::{App, ColorStyle, UpdateAppParams},
-    trash::{Trash, TrashType},
-    view::RepeatedView,
+    app::UpdateAppParams,
+    trash::{TrashPB, TrashType},
 };
-use diesel::sql_types::Binary;
+use crate::{errors::FlowyError, services::persistence::version_1::workspace_sql::WorkspaceTable};
 use flowy_database::{
     prelude::*,
     schema::{app_table, app_table::dsl},
     SqliteConnection,
 };
-use serde::{Deserialize, Serialize, __private::TryFrom};
-use std::convert::TryInto;
-
-use crate::{errors::FlowyError, services::persistence::version_1::workspace_sql::WorkspaceTable};
+use flowy_folder_data_model::revision::AppRevision;
 
 pub struct AppTableSql();
 impl AppTableSql {
-    pub(crate) fn create_app(app: App, conn: &SqliteConnection) -> Result<(), FlowyError> {
-        let app_table = AppTable::new(app);
+    pub(crate) fn create_app(app_rev: AppRevision, conn: &SqliteConnection) -> Result<(), FlowyError> {
+        let app_table = AppTable::new(app_rev);
         match diesel_record_count!(app_table, &app_table.id, conn) {
             0 => diesel_insert_table!(app_table, &app_table, conn),
             _ => {
@@ -86,7 +82,7 @@ pub(crate) struct AppTable {
     pub workspace_id: String, // equal to #[belongs_to(Workspace, foreign_key = "workspace_id")].
     pub name: String,
     pub desc: String,
-    pub color_style: ColorStyleCol,
+    pub color_style: Vec<u8>,
     pub last_view_id: Option<String>,
     pub modified_time: i64,
     pub create_time: i64,
@@ -95,65 +91,33 @@ pub(crate) struct AppTable {
 }
 
 impl AppTable {
-    pub fn new(app: App) -> Self {
+    pub fn new(app_rev: AppRevision) -> Self {
         Self {
-            id: app.id,
-            workspace_id: app.workspace_id,
-            name: app.name,
-            desc: app.desc,
-            color_style: ColorStyleCol::default(),
+            id: app_rev.id,
+            workspace_id: app_rev.workspace_id,
+            name: app_rev.name,
+            desc: app_rev.desc,
+            color_style: Default::default(),
             last_view_id: None,
-            modified_time: app.modified_time,
-            create_time: app.create_time,
+            modified_time: app_rev.modified_time,
+            create_time: app_rev.create_time,
             version: 0,
             is_trash: false,
         }
     }
 }
 
-impl std::convert::From<AppTable> for Trash {
+impl std::convert::From<AppTable> for TrashPB {
     fn from(table: AppTable) -> Self {
-        Trash {
+        TrashPB {
             id: table.id,
             name: table.name,
             modified_time: table.modified_time,
             create_time: table.create_time,
-            ty: TrashType::App,
+            ty: TrashType::TrashApp,
         }
     }
 }
-
-#[derive(Clone, PartialEq, Serialize, Deserialize, Debug, Default, FromSqlRow, AsExpression)]
-#[sql_type = "Binary"]
-pub(crate) struct ColorStyleCol {
-    pub(crate) theme_color: String,
-}
-
-impl std::convert::From<ColorStyle> for ColorStyleCol {
-    fn from(s: ColorStyle) -> Self {
-        Self {
-            theme_color: s.theme_color,
-        }
-    }
-}
-
-impl std::convert::TryInto<Vec<u8>> for &ColorStyleCol {
-    type Error = String;
-
-    fn try_into(self) -> Result<Vec<u8>, Self::Error> {
-        bincode::serialize(self).map_err(|e| format!("{:?}", e))
-    }
-}
-
-impl std::convert::TryFrom<&[u8]> for ColorStyleCol {
-    type Error = String;
-
-    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
-        bincode::deserialize(value).map_err(|e| format!("{:?}", e))
-    }
-}
-
-impl_sql_binary_expression!(ColorStyleCol);
 
 #[derive(AsChangeset, Identifiable, Default, Debug)]
 #[table_name = "app_table"]
@@ -183,14 +147,14 @@ impl AppChangeset {
         }
     }
 }
-impl std::convert::From<AppTable> for App {
+impl std::convert::From<AppTable> for AppRevision {
     fn from(table: AppTable) -> Self {
-        App {
+        AppRevision {
             id: table.id,
             workspace_id: table.workspace_id,
             name: table.name,
             desc: table.desc,
-            belongings: RepeatedView::default(),
+            belongings: vec![],
             version: table.version,
             modified_time: table.modified_time,
             create_time: table.create_time,

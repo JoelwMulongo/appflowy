@@ -16,16 +16,12 @@ rustup show
 
 
 case "$FLOWY_DEV_ENV" in
-Linux-aarch64) 
- cargo make --profile development-linux-aarch64 flowy-sdk-dev
- ;;
-
-Linux-x86)
- cargo make --profile development-linux-x86 flowy-sdk-dev
+Linux) 
+ cargo make --profile "development-linux-$(uname -m)" flowy-sdk-dev
  ;;
 
 macOS)
- cargo make --profile development-mac flowy-sdk-dev
+ cargo make --profile "development-mac-$(uname -m)" flowy-sdk-dev
  ;;
 
 Windows) 

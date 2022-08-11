@@ -1,27 +1,15 @@
 use crate::script::{invalid_workspace_name_test_case, FolderScript::*, FolderTest};
-use flowy_collaboration::{client_document::default::initial_delta_string, entities::revision::RevisionState};
-use flowy_folder::entities::workspace::CreateWorkspaceRequest;
+use flowy_folder::entities::view::ViewDataType;
+use flowy_folder::entities::workspace::CreateWorkspacePayloadPB;
+
+use flowy_revision::disk::RevisionState;
 use flowy_test::{event_builder::*, FlowySDKTest};
 
 #[tokio::test]
 async fn workspace_read_all() {
     let mut test = FolderTest::new().await;
     test.run_scripts(vec![ReadAllWorkspaces]).await;
-    // The first workspace will be the default workspace
-    // The second workspace will be created by FolderTest
-    assert_eq!(test.all_workspace.len(), 2);
-
-    let new_name = "My new workspace".to_owned();
-    test.run_scripts(vec![
-        CreateWorkspace {
-            name: new_name.clone(),
-            desc: "Daily routines".to_owned(),
-        },
-        ReadAllWorkspaces,
-    ])
-    .await;
-    assert_eq!(test.all_workspace.len(), 3);
-    assert_eq!(test.all_workspace[2].name, new_name);
+    assert!(!test.all_workspace.is_empty());
 }
 
 #[tokio::test]
@@ -50,11 +38,9 @@ async fn workspace_create() {
 async fn workspace_read() {
     let mut test = FolderTest::new().await;
     let workspace = test.workspace.clone();
-    let json = serde_json::to_string(&workspace).unwrap();
 
     test.run_scripts(vec![
         ReadWorkspace(Some(workspace.id.clone())),
-        AssertWorkspaceJson(json),
         AssertWorkspace(workspace),
     ])
     .await;
@@ -70,22 +56,21 @@ async fn workspace_create_with_apps() {
     .await;
 
     let app = test.app.clone();
-    let json = serde_json::to_string(&app).unwrap();
-    test.run_scripts(vec![ReadApp(app.id), AssertAppJson(json)]).await;
+    test.run_scripts(vec![ReadApp(app.id)]).await;
 }
 
 #[tokio::test]
 async fn workspace_create_with_invalid_name() {
     for (name, code) in invalid_workspace_name_test_case() {
         let sdk = FlowySDKTest::default();
-        let request = CreateWorkspaceRequest {
+        let request = CreateWorkspacePayloadPB {
             name,
             desc: "".to_owned(),
         };
         assert_eq!(
             FolderEventBuilder::new(sdk)
                 .event(flowy_folder::event_map::FolderEvent::CreateWorkspace)
-                .request(request)
+                .payload(request)
                 .async_send()
                 .await
                 .error()
@@ -149,10 +134,12 @@ async fn app_create_with_view() {
         CreateView {
             name: "View A".to_owned(),
             desc: "View A description".to_owned(),
+            data_type: ViewDataType::TextBlock,
         },
         CreateView {
-            name: "View B".to_owned(),
-            desc: "View B description".to_owned(),
+            name: "Grid".to_owned(),
+            desc: "Grid description".to_owned(),
+            data_type: ViewDataType::Grid,
         },
         ReadApp(app.id),
     ])
@@ -161,7 +148,7 @@ async fn app_create_with_view() {
     app = test.app.clone();
     assert_eq!(app.belongings.len(), 3);
     assert_eq!(app.belongings[1].name, "View A");
-    assert_eq!(app.belongings[2].name, "View B")
+    assert_eq!(app.belongings[2].name, "Grid")
 }
 
 #[tokio::test]
@@ -180,16 +167,6 @@ async fn view_update() {
     ])
     .await;
     assert_eq!(test.view.name, new_name);
-}
-
-#[tokio::test]
-async fn open_document_view() {
-    let mut test = FolderTest::new().await;
-    assert_eq!(test.document_info, None);
-
-    test.run_scripts(vec![OpenDocument]).await;
-    let document_info = test.document_info.unwrap();
-    assert_eq!(document_info.text, initial_delta_string());
 }
 
 #[tokio::test]
@@ -221,10 +198,12 @@ async fn view_delete_all() {
         CreateView {
             name: "View A".to_owned(),
             desc: "View A description".to_owned(),
+            data_type: ViewDataType::TextBlock,
         },
         CreateView {
-            name: "View B".to_owned(),
-            desc: "View B description".to_owned(),
+            name: "Grid".to_owned(),
+            desc: "Grid description".to_owned(),
+            data_type: ViewDataType::Grid,
         },
         ReadApp(app.id.clone()),
     ])
@@ -252,6 +231,7 @@ async fn view_delete_all_permanent() {
         CreateView {
             name: "View A".to_owned(),
             desc: "View A description".to_owned(),
+            data_type: ViewDataType::TextBlock,
         },
         ReadApp(app.id.clone()),
     ])
@@ -350,6 +330,7 @@ async fn folder_sync_revision_with_new_view() {
         CreateView {
             name: view_name.clone(),
             desc: view_desc.clone(),
+            data_type: ViewDataType::TextBlock,
         },
         AssertCurrentRevId(3),
         AssertNextSyncRevId(Some(3)),
@@ -359,7 +340,6 @@ async fn folder_sync_revision_with_new_view() {
 
     let view = test.view.clone();
     assert_eq!(view.name, view_name);
-    assert_eq!(view.desc, view_desc);
     test.run_scripts(vec![ReadView(view.id.clone()), AssertView(view)])
         .await;
 }

@@ -37,6 +37,10 @@ lib/generated_plugin_registrant.dart
 # Language related generated files
 lib/generated/
 
+# Freezed generated files
+*.g.dart 
+*.freezed.dart
+
 # Symbolication related
 app.*.symbols
 
@@ -60,3 +64,5 @@ windows/flutter/dart_ffi/
 **/**/*.dll
 **/**/*.so
 **/**/Brewfile.lock.json
+**/.sandbox
+**/.vscode/

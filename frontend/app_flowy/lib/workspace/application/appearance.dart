@@ -1,25 +1,31 @@
-import 'package:app_flowy/user/infrastructure/repos/user_setting_repo.dart';
+import 'dart:async';
+
+import 'package:app_flowy/user/application/user_settings_service.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flowy_infra/theme.dart';
-import 'package:flowy_infra/language.dart';
-import 'package:flowy_sdk/protobuf/flowy-user-data-model/user_setting.pb.dart';
+import 'package:flowy_sdk/log.dart';
+import 'package:flowy_sdk/protobuf/flowy-user/user_setting.pb.dart';
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
 
 class AppearanceSettingModel extends ChangeNotifier with EquatableMixin {
-  AppearanceSettings setting;
+  AppearanceSettingsPB setting;
   AppTheme _theme;
-  AppLanguage _language;
+  Locale _locale;
+  Timer? _saveOperation;
 
   AppearanceSettingModel(this.setting)
       : _theme = AppTheme.fromName(name: setting.theme),
-        _language = languageFromString(setting.language);
+        _locale = Locale(setting.locale.languageCode, setting.locale.countryCode);
 
   AppTheme get theme => _theme;
-  AppLanguage get language => _language;
+  Locale get locale => _locale;
 
   Future<void> save() async {
-    await UserSettingReppsitory().setAppearanceSettings(setting);
+    _saveOperation?.cancel();
+    _saveOperation = Timer(const Duration(seconds: 2), () async {
+      await UserSettingsService().setAppearanceSettings(setting);
+    });
   }
 
   @override
@@ -38,15 +44,29 @@ class AppearanceSettingModel extends ChangeNotifier with EquatableMixin {
     }
   }
 
-  void setLanguage(BuildContext context, AppLanguage language) {
-    String languageString = stringFromLanguageName(language);
+  void setLocale(BuildContext context, Locale newLocale) {
+    if (_locale != newLocale) {
+      if (!context.supportedLocales.contains(newLocale)) {
+        Log.warn("Unsupported locale: $newLocale");
+        newLocale = const Locale('en');
+        Log.debug("Fallback to locale: $newLocale");
+      }
 
-    if (setting.language != languageString) {
-      context.setLocale(localeFromLanguageName(language));
-      _language = language;
-      setting.language = languageString;
+      context.setLocale(newLocale);
+      _locale = newLocale;
+      setting.locale.languageCode = _locale.languageCode;
+      setting.locale.countryCode = _locale.countryCode ?? "";
       notifyListeners();
       save();
+    }
+  }
+
+  void readLocaleWhenAppLaunch(BuildContext context) {
+    if (setting.resetAsDefault) {
+      setting.resetAsDefault = false;
+      save();
+
+      setLocale(context, context.deviceLocale);
     }
   }
 }

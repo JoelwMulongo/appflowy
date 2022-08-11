@@ -1,47 +1,48 @@
 import 'package:flutter/material.dart';
 
-enum AppLanguage {
-  english,
-  chinese,
-  italian,
-  french,
-}
+String languageFromLocale(Locale locale) {
+  switch (locale.languageCode) {
+    // Most often used languages
+    case "en":
+      return "English";
+    case "zh":
+      return "简体中文";
 
-String stringFromLanguageName(AppLanguage language) {
-  switch (language) {
-    case AppLanguage.english:
-      return "en";
-    case AppLanguage.chinese:
-      return "ch";
-    case AppLanguage.italian:
-      return "it";
-    case AppLanguage.french:
-      return "fr";
-  }
-}
+    // Then in alphabetical order
+    case "ca":
+      return "Català";
+    case "de":
+      return "Deutsch";
+    case "es":
+      return "Español";
+    case "fr":
+      switch (locale.countryCode) {
+        case "CA":
+          return "Français (CA)";
+        case "FR":
+          return "Français (FR)";
+        default:
+          return locale.languageCode;
+      }
+    case "hu":
+      return "Magyar";
+    case "id":
+      return "Bahasa";
+    case "it":
+      return "Italiano";
+    case "ja":
+      return "日本語";
+    case "pl":
+      return "Polski";
+    case "pt":
+      return "Português";
+    case "ru":
+      return "русский";
+    case "tr":
+      return "Türkçe";
 
-AppLanguage languageFromString(String name) {
-  AppLanguage language = AppLanguage.english;
-  if (name == "ch") {
-    language = AppLanguage.chinese;
-  } else if (name == "it") {
-    language = AppLanguage.italian;
-  } else if (name == "fr") {
-    language = AppLanguage.french;
-  }
-
-  return language;
-}
-
-Locale localeFromLanguageName(AppLanguage language) {
-  switch (language) {
-    case AppLanguage.english:
-      return const Locale('en');
-    case AppLanguage.chinese:
-      return const Locale('zh', 'CN');
-    case AppLanguage.italian:
-      return const Locale('it', 'IT');
-    case AppLanguage.french:
-      return const Locale('fr', 'CA');
+    // If not found then the language code will be displayed
+    default:
+      return locale.languageCode;
   }
 }

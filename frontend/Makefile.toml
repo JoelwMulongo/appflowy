@@ -7,44 +7,79 @@ extend = [
     { path = "scripts/makefile/docker.toml" },
     { path = "scripts/makefile/env.toml" },
     { path = "scripts/makefile/flutter.toml" },
+    { path = "scripts/makefile/tool.toml" },
 ]
+
+[config]
+on_error_task = "catch"
+
+[tasks.catch]
+run_task = {name = ["restore-crate-type"]}
 
 [env]
 RUST_LOG = "info"
 CARGO_MAKE_EXTEND_WORKSPACE_MAKEFILE = true
 CARGO_MAKE_CRATE_FS_NAME = "dart_ffi"
 CARGO_MAKE_CRATE_NAME = "dart-ffi"
-VERSION = "0.0.3"
+LIB_NAME = "dart_ffi"
+CURRENT_APP_VERSION = "0.0.4"
 FEATURES = "flutter"
 PRODUCT_NAME = "AppFlowy"
-#CRATE_TYPE: https://doc.rust-lang.org/reference/linkage.html
+# CRATE_TYPE: https://doc.rust-lang.org/reference/linkage.html
+# If you update the macOS's CRATE_TYPE, don't forget to update the
+# flowy_sdk.podspec
+#   for staticlib:
+#        s.static_framework = true
+#        s.vendored_libraries = "libdart_ffi.a"
+#   for cdylib:
+#        s.vendored_libraries = "libdart_ffi.dylib"
+#
+# Remember to update the ffi.dart:
+#   for staticlib:
+#       if (Platform.isMacOS) return DynamicLibrary.open('${prefix}/libdart_ffi.a');
+#   for cdylib:
+#       if (Platform.isMacOS) return DynamicLibrary.open('${prefix}/libdart_ffi.dylib');
 CRATE_TYPE = "staticlib"
 SDK_EXT = "a"
 APP_ENVIRONMENT = "local"
+FLUTTER_FLOWY_SDK_PATH="app_flowy/packages/flowy_sdk"
+PROTOBUF_DERIVE_CACHE="../shared-lib/flowy-derive/src/derive_cache/derive_cache.rs"
 
-[env.development-mac]
-RUST_LOG = "trace"
+[env.development-mac-arm64]
+RUST_LOG = "info"
+TARGET_OS = "macos"
+RUST_COMPILE_TARGET = "aarch64-apple-darwin"
+BUILD_FLAG = "debug"
+FLUTTER_OUTPUT_DIR = "Debug"
+PRODUCT_EXT = "app"
+BUILD_ARCHS = "arm64"
+
+[env.development-mac-x86_64]
+RUST_LOG = "info"
 TARGET_OS = "macos"
 RUST_COMPILE_TARGET = "x86_64-apple-darwin"
 BUILD_FLAG = "debug"
 FLUTTER_OUTPUT_DIR = "Debug"
 PRODUCT_EXT = "app"
+BUILD_ARCHS = "x86_64"
 
-[env.production-mac-aarch64]
+[env.production-mac-arm64]
 BUILD_FLAG = "release"
 TARGET_OS = "macos"
 RUST_COMPILE_TARGET = "aarch64-apple-darwin"
 FLUTTER_OUTPUT_DIR = "Release"
 PRODUCT_EXT = "app"
 APP_ENVIRONMENT = "production"
+BUILD_ARCHS = "arm64"
 
-[env.production-mac-x86]
+[env.production-mac-x86_64]
 BUILD_FLAG = "release"
 TARGET_OS = "macos"
 RUST_COMPILE_TARGET = "x86_64-apple-darwin"
 FLUTTER_OUTPUT_DIR = "Release"
 PRODUCT_EXT = "app"
 APP_ENVIRONMENT = "production"
+BUILD_ARCHS = "x86_64"
 
 [env.development-windows-x86]
 TARGET_OS = "windows"
@@ -65,7 +100,7 @@ CRATE_TYPE = "cdylib"
 SDK_EXT = "dll"
 APP_ENVIRONMENT = "production"
 
-[env.development-linux-x86]
+[env.development-linux-x86_64]
 TARGET_OS = "linux"
 RUST_COMPILE_TARGET = "x86_64-unknown-linux-gnu"
 BUILD_FLAG = "debug"
@@ -74,7 +109,7 @@ FLUTTER_OUTPUT_DIR = "Debug"
 SDK_EXT = "so"
 LINUX_ARCH = "x64"
 
-[env.production-linux-x86]
+[env.production-linux-x86_64]
 BUILD_FLAG = "release"
 TARGET_OS = "linux"
 RUST_COMPILE_TARGET = "x86_64-unknown-linux-gnu"
@@ -115,12 +150,7 @@ script = [
     echo PRODUCT_EXT: ${PRODUCT_EXT}
     echo APP_ENVIRONMENT: ${APP_ENVIRONMENT}
     echo ${platforms}
-
-    echo "-------- Flutter --------"
-    flutter doctor
-
-    echo "-------- Rust --------"
-    rustup show
+    echo ${BUILD_ARCHS}
     '''
 ]
 script_runner = "@shell"
@@ -128,7 +158,6 @@ script_runner = "@shell"
 [env.production-ios]
 BUILD_FLAG = "release"
 TARGET_OS = "ios"
-CRATE_TYPE = "staticlib"
 FLUTTER_OUTPUT_DIR = "Release"
 PRODUCT_EXT = "ipa"
 
@@ -156,3 +185,13 @@ script = [
       """,
 ]
 script_runner = "@duckscript"
+
+[tasks.test-build]
+condition = { env_set = [ "FLUTTER_FLOWY_SDK_PATH"] }
+script = [
+    """
+      cd ${CARGO_MAKE_WORKSPACE_WORKING_DIRECTORY}/rust-lib/flowy-net
+      cargo build -vv --features=dart
+      """,
+]
+script_runner = "@shell"

@@ -1,50 +1,47 @@
-use crate::services::web_socket::make_folder_ws_manager;
-use flowy_collaboration::{
-    client_folder::{FolderChange, FolderPad},
+use crate::manager::FolderId;
+use bytes::Bytes;
+use flowy_error::{FlowyError, FlowyResult};
+use flowy_revision::{
+    RevisionCloudService, RevisionCompactor, RevisionManager, RevisionObjectBuilder, RevisionWebSocket,
+};
+use flowy_sync::util::make_delta_from_revisions;
+use flowy_sync::{
+    client_folder::{FolderChangeset, FolderPad},
     entities::{revision::Revision, ws_data::ServerRevisionWSData},
 };
-
-use crate::controller::FolderId;
-use flowy_collaboration::util::make_delta_from_revisions;
-use flowy_error::{FlowyError, FlowyResult};
-use flowy_sync::{
-    RevisionCache, RevisionCloudService, RevisionCompact, RevisionManager, RevisionObjectBuilder, RevisionWebSocket,
-    RevisionWebSocketManager,
-};
 use lib_infra::future::FutureResult;
-use lib_ot::core::PlainAttributes;
-use lib_sqlite::ConnectionPool;
+use lib_ot::core::PhantomAttributes;
+
 use parking_lot::RwLock;
 use std::sync::Arc;
 
 pub struct FolderEditor {
     user_id: String,
+    #[allow(dead_code)]
     pub(crate) folder_id: FolderId,
     pub(crate) folder: Arc<RwLock<FolderPad>>,
     rev_manager: Arc<RevisionManager>,
-    ws_manager: Arc<RevisionWebSocketManager>,
+    #[cfg(feature = "sync")]
+    ws_manager: Arc<flowy_revision::RevisionWebSocketManager>,
 }
 
 impl FolderEditor {
+    #[allow(unused_variables)]
     pub async fn new(
         user_id: &str,
         folder_id: &FolderId,
         token: &str,
-        pool: Arc<ConnectionPool>,
+        mut rev_manager: RevisionManager,
         web_socket: Arc<dyn RevisionWebSocket>,
     ) -> FlowyResult<Self> {
-        let cache = Arc::new(RevisionCache::new(user_id, folder_id.as_ref(), pool));
-        let mut rev_manager = RevisionManager::new(user_id, folder_id.as_ref(), cache);
-        let cloud = Arc::new(FolderRevisionCloudServiceImpl {
+        let cloud = Arc::new(FolderRevisionCloudService {
             token: token.to_string(),
         });
-        let folder = Arc::new(RwLock::new(
-            rev_manager
-                .load::<FolderPadBuilder, FolderRevisionCompact>(cloud)
-                .await?,
-        ));
+        let folder = Arc::new(RwLock::new(rev_manager.load::<FolderPadBuilder>(Some(cloud)).await?));
         let rev_manager = Arc::new(rev_manager);
-        let ws_manager = make_folder_ws_manager(
+
+        #[cfg(feature = "sync")]
+        let ws_manager = crate::services::web_socket::make_folder_ws_manager(
             user_id,
             folder_id.as_ref(),
             rev_manager.clone(),
@@ -60,22 +57,30 @@ impl FolderEditor {
             folder_id,
             folder,
             rev_manager,
+            #[cfg(feature = "sync")]
             ws_manager,
         })
     }
 
+    #[cfg(feature = "sync")]
     pub async fn receive_ws_data(&self, data: ServerRevisionWSData) -> FlowyResult<()> {
         let _ = self.ws_manager.ws_passthrough_tx.send(data).await.map_err(|e| {
             let err_msg = format!("{} passthrough error: {}", self.folder_id, e);
             FlowyError::internal().context(err_msg)
         })?;
+
         Ok(())
     }
 
-    pub(crate) fn apply_change(&self, change: FolderChange) -> FlowyResult<()> {
-        let FolderChange { delta, md5 } = change;
+    #[cfg(not(feature = "sync"))]
+    pub async fn receive_ws_data(&self, _data: ServerRevisionWSData) -> FlowyResult<()> {
+        Ok(())
+    }
+
+    pub(crate) fn apply_change(&self, change: FolderChangeset) -> FlowyResult<()> {
+        let FolderChangeset { delta, md5 } = change;
         let (base_rev_id, rev_id) = self.rev_manager.next_rev_id_pair();
-        let delta_data = delta.to_bytes();
+        let delta_data = delta.json_bytes();
         let revision = Revision::new(
             &self.rev_manager.object_id,
             base_rev_id,
@@ -84,11 +89,7 @@ impl FolderEditor {
             &self.user_id,
             md5,
         );
-        let _ = futures::executor::block_on(async {
-            self.rev_manager
-                .add_local_revision::<FolderRevisionCompact>(&revision)
-                .await
-        })?;
+        let _ = futures::executor::block_on(async { self.rev_manager.add_local_revision(&revision).await })?;
         Ok(())
     }
 
@@ -103,18 +104,18 @@ struct FolderPadBuilder();
 impl RevisionObjectBuilder for FolderPadBuilder {
     type Output = FolderPad;
 
-    fn build_with_revisions(_object_id: &str, revisions: Vec<Revision>) -> FlowyResult<Self::Output> {
+    fn build_object(_object_id: &str, revisions: Vec<Revision>) -> FlowyResult<Self::Output> {
         let pad = FolderPad::from_revisions(revisions)?;
         Ok(pad)
     }
 }
 
-struct FolderRevisionCloudServiceImpl {
+struct FolderRevisionCloudService {
     #[allow(dead_code)]
     token: String,
 }
 
-impl RevisionCloudService for FolderRevisionCloudServiceImpl {
+impl RevisionCloudService for FolderRevisionCloudService {
     #[tracing::instrument(level = "trace", skip(self))]
     fn fetch_object(&self, _user_id: &str, _object_id: &str) -> FutureResult<Vec<Revision>, FlowyError> {
         FutureResult::new(async move { Ok(vec![]) })
@@ -128,24 +129,10 @@ impl FolderEditor {
     }
 }
 
-struct FolderRevisionCompact();
-impl RevisionCompact for FolderRevisionCompact {
-    fn compact_revisions(user_id: &str, object_id: &str, mut revisions: Vec<Revision>) -> FlowyResult<Revision> {
-        if revisions.is_empty() {
-            return Err(FlowyError::internal().context("Can't compact the empty folder's revisions"));
-        }
-
-        if revisions.len() == 1 {
-            return Ok(revisions.pop().unwrap());
-        }
-
-        let first_revision = revisions.first().unwrap();
-        let last_revision = revisions.last().unwrap();
-
-        let (base_rev_id, rev_id) = first_revision.pair_rev_id();
-        let md5 = last_revision.md5.clone();
-        let delta = make_delta_from_revisions::<PlainAttributes>(revisions)?;
-        let delta_data = delta.to_bytes();
-        Ok(Revision::new(object_id, base_rev_id, rev_id, delta_data, user_id, md5))
+pub struct FolderRevisionCompactor();
+impl RevisionCompactor for FolderRevisionCompactor {
+    fn bytes_from_revisions(&self, revisions: Vec<Revision>) -> FlowyResult<Bytes> {
+        let delta = make_delta_from_revisions::<PhantomAttributes>(revisions)?;
+        Ok(delta.json_bytes())
     }
 }

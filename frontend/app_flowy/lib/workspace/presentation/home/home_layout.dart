@@ -11,21 +11,24 @@ import 'home_sizes.dart';
 class HomeLayout {
   late double menuWidth;
   late bool showMenu;
-  late bool showEditPannel;
-  late double editPannelWidth;
+  late bool showEditPanel;
+  late double editPanelWidth;
   late double homePageLOffset;
   late double homePageROffset;
   late Duration animDuration;
 
-  HomeLayout(BuildContext context, BoxConstraints homeScreenConstraint, bool forceCollapse) {
+  HomeLayout(BuildContext context, BoxConstraints homeScreenConstraint,
+      bool forceCollapse) {
     final homeBlocState = context.read<HomeBloc>().state;
 
-    showEditPannel = homeBlocState.editContext.isSome();
+    showEditPanel = homeBlocState.panelContext.isSome();
 
     menuWidth = Sizes.sideBarMed;
     if (context.widthPx >= PageBreaks.desktop) {
       menuWidth = Sizes.sideBarLg;
     }
+
+    menuWidth += homeBlocState.resizeOffset;
 
     if (forceCollapse) {
       showMenu = false;
@@ -36,7 +39,7 @@ class HomeLayout {
     homePageLOffset = showMenu ? menuWidth : 0.0;
     animDuration = .35.seconds;
 
-    editPannelWidth = HomeSizes.editPannelWidth;
-    homePageROffset = showEditPannel ? editPannelWidth : 0;
+    editPanelWidth = HomeSizes.editPanelWidth;
+    homePageROffset = showEditPanel ? editPanelWidth : 0;
   }
 }

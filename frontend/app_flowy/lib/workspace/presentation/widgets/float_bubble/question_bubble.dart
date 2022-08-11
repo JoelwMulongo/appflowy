@@ -1,3 +1,5 @@
+import 'package:app_flowy/startup/tasks/rust_sdk.dart';
+import 'package:app_flowy/workspace/presentation/home/toast.dart';
 import 'package:app_flowy/workspace/presentation/widgets/pop_up_action.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra/theme.dart';
@@ -5,7 +7,6 @@ import 'package:flowy_infra_ui/flowy_infra_ui.dart';
 import 'package:flowy_infra_ui/style_widget/button.dart';
 import 'package:flowy_infra_ui/style_widget/text.dart';
 import 'package:flowy_infra_ui/widget/spacing.dart';
-import 'package:flowy_log/flowy_log.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -15,8 +16,6 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:app_flowy/generated/locale_keys.g.dart';
 import 'package:device_info_plus/device_info_plus.dart';
-import 'package:fluttertoast/fluttertoast.dart';
-import 'package:app_flowy/workspace/presentation/stack_page/home_stack.dart';
 
 class QuestionBubble extends StatelessWidget {
   const QuestionBubble({Key? key}) : super(key: key);
@@ -46,73 +45,12 @@ class QuestionBubble extends StatelessWidget {
                   _launchURL("https://discord.gg/9Q2xaN37tV");
                   break;
                 case BubbleAction.debug:
-                  final deviceInfoPlugin = DeviceInfoPlugin();
-                  final deviceInfo = deviceInfoPlugin.deviceInfo;
-                  
-                  deviceInfo.then((info) {
-                    var debugText = "";
-                    info.toMap().forEach((key, value) {
-                      debugText = debugText + "$key: $value\n";
-                    });
-
-                    Clipboard.setData(ClipboardData( text: debugText ));
-
-                    Widget toast = Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 12.0),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(25.0),
-                        color: theme.main1,
-                      ),
-                      child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                          const Icon(Icons.check),
-                          const SizedBox(
-                            width: 12.0,
-                          ),
-                          Text(LocaleKeys.questionBubble_debug_success.tr()),
-                        ],
-                      ),
-                    );
-
-                    fToast.showToast(
-                        child: toast,
-                        gravity: ToastGravity.BOTTOM,
-                        toastDuration: const Duration(seconds: 3),
-                    );
-                  }).catchError((error) {
-                    Log.info("Debug info has not yet been implemented on this platform");
-
-                    Widget toast = Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 12.0),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(25.0),
-                        color: Colors.red,
-                      ),
-                      child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                          const Icon(Icons.close),
-                          const SizedBox(
-                            width: 12.0,
-                          ),
-                          Text(LocaleKeys.questionBubble_debug_fail.tr()),
-                        ],
-                      ),
-                    );
-
-                    fToast.showToast(
-                        child: toast,
-                        gravity: ToastGravity.BOTTOM,
-                        toastDuration: const Duration(seconds: 3),
-                    );
-                  }, test: (e) => e is UnimplementedError);
+                  _DebugToast().show();
                   break;
               }
             });
           });
           actionList.show(
-            context,
             context,
             anchorDirection: AnchorDirection.topWithRightAligned,
             anchorOffset: const Offset(0, -10),
@@ -123,15 +61,47 @@ class QuestionBubble extends StatelessWidget {
   }
 
   _launchURL(String url) async {
-    if (await canLaunch(url)) {
-      await launch(url);
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
     } else {
       throw 'Could not launch $url';
     }
   }
 }
 
-class QuestionBubbleActionSheet with ActionList<BubbleActionWrapper> implements FlowyOverlayDelegate {
+class _DebugToast {
+  void show() async {
+    var debugInfo = "";
+    debugInfo += await _getDeviceInfo();
+    debugInfo += await _getDocumentPath();
+    Clipboard.setData(ClipboardData(text: debugInfo));
+
+    showMessageToast(LocaleKeys.questionBubble_debug_success.tr());
+  }
+
+  Future<String> _getDeviceInfo() async {
+    final deviceInfoPlugin = DeviceInfoPlugin();
+    final deviceInfo = deviceInfoPlugin.deviceInfo;
+
+    return deviceInfo.then((info) {
+      var debugText = "";
+      info.toMap().forEach((key, value) {
+        debugText = debugText + "$key: $value\n";
+      });
+      return debugText;
+    });
+  }
+
+  Future<String> _getDocumentPath() async {
+    return appFlowyDocumentDirectory().then((directory) {
+      final path = directory.path.toString();
+      return "Document: $path\n";
+    });
+  }
+}
+
+class QuestionBubbleActionSheet with ActionList<BubbleActionWrapper>, FlowyOverlayDelegate {
   final Function(dartz.Option<BubbleAction>) onSelected;
   final _items = BubbleAction.values.map((action) => BubbleActionWrapper(action)).toList();
 
@@ -213,11 +183,7 @@ class FlowyVersionDescription extends StatelessWidget {
   }
 }
 
-enum BubbleAction {
-  whatsNews,
-  help,
-  debug
-}
+enum BubbleAction { whatsNews, help, debug }
 
 class BubbleActionWrapper extends ActionItem {
   final BubbleAction inner;

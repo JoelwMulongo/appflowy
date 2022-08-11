@@ -2,49 +2,44 @@ mod migration;
 pub mod version_1;
 mod version_2;
 
-use flowy_collaboration::{
-    client_folder::FolderPad,
-    entities::revision::{Revision, RevisionState},
+use crate::{
+    event_map::WorkspaceDatabase,
+    manager::FolderId,
+    services::{folder_editor::FolderEditor, persistence::migration::FolderMigration},
 };
+use flowy_database::ConnectionPool;
+use flowy_error::{FlowyError, FlowyResult};
+use flowy_folder_data_model::revision::{AppRevision, TrashRevision, ViewRevision, WorkspaceRevision};
+use flowy_revision::disk::{RevisionRecord, RevisionState};
+use flowy_revision::mk_text_block_revision_disk_cache;
+use flowy_sync::{client_folder::FolderPad, entities::revision::Revision};
+use lib_ot::core::TextDeltaBuilder;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 pub use version_1::{app_sql::*, trash_sql::*, v1_impl::V1Transaction, view_sql::*, workspace_sql::*};
 
-use crate::{
-    controller::FolderId,
-    event_map::WorkspaceDatabase,
-    services::{folder_editor::FolderEditor, persistence::migration::FolderMigration},
-};
-use flowy_error::{FlowyError, FlowyResult};
-use flowy_folder_data_model::entities::{
-    app::App,
-    trash::{RepeatedTrash, Trash},
-    view::View,
-    workspace::Workspace,
-};
-use flowy_sync::{mk_revision_disk_cache, RevisionRecord};
-use lib_sqlite::ConnectionPool;
-
 pub trait FolderPersistenceTransaction {
-    fn create_workspace(&self, user_id: &str, workspace: Workspace) -> FlowyResult<()>;
-    fn read_workspaces(&self, user_id: &str, workspace_id: Option<String>) -> FlowyResult<Vec<Workspace>>;
+    fn create_workspace(&self, user_id: &str, workspace_rev: WorkspaceRevision) -> FlowyResult<()>;
+    fn read_workspaces(&self, user_id: &str, workspace_id: Option<String>) -> FlowyResult<Vec<WorkspaceRevision>>;
     fn update_workspace(&self, changeset: WorkspaceChangeset) -> FlowyResult<()>;
     fn delete_workspace(&self, workspace_id: &str) -> FlowyResult<()>;
 
-    fn create_app(&self, app: App) -> FlowyResult<()>;
+    fn create_app(&self, app_rev: AppRevision) -> FlowyResult<()>;
     fn update_app(&self, changeset: AppChangeset) -> FlowyResult<()>;
-    fn read_app(&self, app_id: &str) -> FlowyResult<App>;
-    fn read_workspace_apps(&self, workspace_id: &str) -> FlowyResult<Vec<App>>;
-    fn delete_app(&self, app_id: &str) -> FlowyResult<App>;
+    fn read_app(&self, app_id: &str) -> FlowyResult<AppRevision>;
+    fn read_workspace_apps(&self, workspace_id: &str) -> FlowyResult<Vec<AppRevision>>;
+    fn delete_app(&self, app_id: &str) -> FlowyResult<AppRevision>;
+    fn move_app(&self, app_id: &str, from: usize, to: usize) -> FlowyResult<()>;
 
-    fn create_view(&self, view: View) -> FlowyResult<()>;
-    fn read_view(&self, view_id: &str) -> FlowyResult<View>;
-    fn read_views(&self, belong_to_id: &str) -> FlowyResult<Vec<View>>;
+    fn create_view(&self, view_rev: ViewRevision) -> FlowyResult<()>;
+    fn read_view(&self, view_id: &str) -> FlowyResult<ViewRevision>;
+    fn read_views(&self, belong_to_id: &str) -> FlowyResult<Vec<ViewRevision>>;
     fn update_view(&self, changeset: ViewChangeset) -> FlowyResult<()>;
     fn delete_view(&self, view_id: &str) -> FlowyResult<()>;
+    fn move_view(&self, view_id: &str, from: usize, to: usize) -> FlowyResult<()>;
 
-    fn create_trash(&self, trashes: Vec<Trash>) -> FlowyResult<()>;
-    fn read_trash(&self, trash_id: Option<String>) -> FlowyResult<RepeatedTrash>;
+    fn create_trash(&self, trashes: Vec<TrashRevision>) -> FlowyResult<()>;
+    fn read_trash(&self, trash_id: Option<String>) -> FlowyResult<Vec<TrashRevision>>;
     fn delete_trash(&self, trash_ids: Option<Vec<String>>) -> FlowyResult<()>;
 }
 
@@ -102,7 +97,10 @@ impl FolderPersistence {
     pub async fn initialize(&self, user_id: &str, folder_id: &FolderId) -> FlowyResult<()> {
         let migrations = FolderMigration::new(user_id, self.database.clone());
         if let Some(migrated_folder) = migrations.run_v1_migration()? {
-            tracing::trace!("Save migration folder");
+            self.save_folder(user_id, folder_id, migrated_folder).await?;
+        }
+
+        if let Some(migrated_folder) = migrations.run_v2_migration(user_id, folder_id).await? {
             self.save_folder(user_id, folder_id, migrated_folder).await?;
         }
 
@@ -111,17 +109,16 @@ impl FolderPersistence {
 
     pub async fn save_folder(&self, user_id: &str, folder_id: &FolderId, folder: FolderPad) -> FlowyResult<()> {
         let pool = self.database.db_pool()?;
-        let delta_data = folder.delta().to_bytes();
-        let md5 = folder.md5();
-        let revision = Revision::new(folder_id.as_ref(), 0, 0, delta_data, user_id, md5);
+        let json = folder.to_json()?;
+        let delta_data = TextDeltaBuilder::new().insert(&json).build().json_bytes();
+        let revision = Revision::initial_revision(user_id, folder_id.as_ref(), delta_data);
         let record = RevisionRecord {
             revision,
             state: RevisionState::Sync,
             write_to_disk: true,
         };
 
-        let conn = pool.get()?;
-        let disk_cache = mk_revision_disk_cache(user_id, pool);
-        disk_cache.create_revision_records(vec![record], &conn)
+        let disk_cache = mk_text_block_revision_disk_cache(user_id, pool);
+        disk_cache.delete_and_insert_records(folder_id.as_ref(), None, vec![record])
     }
 }

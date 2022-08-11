@@ -1,34 +1,35 @@
 use crate::prelude::*;
+use flowy_folder::entities::WorkspaceIdPB;
 use flowy_folder::{
     entities::{
         app::*,
         view::*,
-        workspace::{CreateWorkspaceRequest, QueryWorkspaceRequest, Workspace},
+        workspace::{CreateWorkspacePayloadPB, WorkspacePB},
     },
     event_map::FolderEvent::{CreateWorkspace, OpenWorkspace, *},
 };
 use flowy_user::{
-    entities::{SignInRequest, SignUpRequest, UserProfile},
+    entities::{SignInPayloadPB, SignUpPayloadPB, UserProfilePB},
     errors::FlowyError,
     event_map::UserEvent::{InitUser, SignIn, SignOut, SignUp},
 };
 use lib_dispatch::prelude::{EventDispatcher, ModuleRequest, ToBytes};
-use lib_infra::uuid_string;
 use std::{fs, path::PathBuf, sync::Arc};
 
 pub struct ViewTest {
     pub sdk: FlowySDKTest,
-    pub workspace: Workspace,
-    pub app: App,
-    pub view: View,
+    pub workspace: WorkspacePB,
+    pub app: AppPB,
+    pub view: ViewPB,
 }
 
 impl ViewTest {
-    pub async fn new(sdk: &FlowySDKTest) -> Self {
+    #[allow(dead_code)]
+    pub async fn new(sdk: &FlowySDKTest, data_type: ViewDataType, data: Vec<u8>) -> Self {
         let workspace = create_workspace(sdk, "Workspace", "").await;
         open_workspace(sdk, &workspace.id).await;
         let app = create_app(sdk, "App", "AppFlowy GitHub Project", &workspace.id).await;
-        let view = create_view(sdk, &app.id).await;
+        let view = create_view(sdk, &app.id, data_type, data).await;
         Self {
             sdk: sdk.clone(),
             workspace,
@@ -36,36 +37,44 @@ impl ViewTest {
             view,
         }
     }
+
+    pub async fn new_grid_view(sdk: &FlowySDKTest, data: Vec<u8>) -> Self {
+        Self::new(sdk, ViewDataType::Grid, data).await
+    }
+
+    pub async fn new_text_block_view(sdk: &FlowySDKTest) -> Self {
+        Self::new(sdk, ViewDataType::TextBlock, vec![]).await
+    }
 }
 
-async fn create_workspace(sdk: &FlowySDKTest, name: &str, desc: &str) -> Workspace {
-    let request = CreateWorkspaceRequest {
+async fn create_workspace(sdk: &FlowySDKTest, name: &str, desc: &str) -> WorkspacePB {
+    let request = CreateWorkspacePayloadPB {
         name: name.to_owned(),
         desc: desc.to_owned(),
     };
 
     let workspace = FolderEventBuilder::new(sdk.clone())
         .event(CreateWorkspace)
-        .request(request)
+        .payload(request)
         .async_send()
         .await
-        .parse::<Workspace>();
+        .parse::<WorkspacePB>();
     workspace
 }
 
 async fn open_workspace(sdk: &FlowySDKTest, workspace_id: &str) {
-    let request = QueryWorkspaceRequest {
-        workspace_id: Some(workspace_id.to_owned()),
+    let payload = WorkspaceIdPB {
+        value: Some(workspace_id.to_owned()),
     };
     let _ = FolderEventBuilder::new(sdk.clone())
         .event(OpenWorkspace)
-        .request(request)
+        .payload(payload)
         .async_send()
         .await;
 }
 
-async fn create_app(sdk: &FlowySDKTest, name: &str, desc: &str, workspace_id: &str) -> App {
-    let create_app_request = CreateAppRequest {
+async fn create_app(sdk: &FlowySDKTest, name: &str, desc: &str, workspace_id: &str) -> AppPB {
+    let create_app_request = CreateAppPayloadPB {
         workspace_id: workspace_id.to_owned(),
         name: name.to_string(),
         desc: desc.to_string(),
@@ -74,28 +83,30 @@ async fn create_app(sdk: &FlowySDKTest, name: &str, desc: &str, workspace_id: &s
 
     let app = FolderEventBuilder::new(sdk.clone())
         .event(CreateApp)
-        .request(create_app_request)
+        .payload(create_app_request)
         .async_send()
         .await
-        .parse::<App>();
+        .parse::<AppPB>();
     app
 }
 
-async fn create_view(sdk: &FlowySDKTest, app_id: &str) -> View {
-    let request = CreateViewRequest {
+async fn create_view(sdk: &FlowySDKTest, app_id: &str, data_type: ViewDataType, data: Vec<u8>) -> ViewPB {
+    let request = CreateViewPayloadPB {
         belong_to_id: app_id.to_string(),
         name: "View A".to_string(),
         desc: "".to_string(),
         thumbnail: Some("http://1.png".to_string()),
-        view_type: ViewType::Doc,
+        data_type,
+        plugin_type: 0,
+        data,
     };
 
     let view = FolderEventBuilder::new(sdk.clone())
         .event(CreateView)
-        .request(request)
+        .payload(request)
         .async_send()
         .await
-        .parse::<View>();
+        .parse::<ViewPB>();
     view
 }
 
@@ -115,7 +126,7 @@ pub fn root_dir() -> String {
 }
 
 pub fn random_email() -> String {
-    format!("{}@appflowy.io", uuid_string())
+    format!("{}@appflowy.io", nanoid!(20))
 }
 
 pub fn login_email() -> String {
@@ -127,13 +138,13 @@ pub fn login_password() -> String {
 }
 
 pub struct SignUpContext {
-    pub user_profile: UserProfile,
+    pub user_profile: UserProfilePB,
     pub password: String,
 }
 
 pub fn sign_up(dispatch: Arc<EventDispatcher>) -> SignUpContext {
     let password = login_password();
-    let payload = SignUpRequest {
+    let payload = SignUpPayloadPB {
         email: random_email(),
         name: "app flowy".to_string(),
         password: password.clone(),
@@ -143,7 +154,7 @@ pub fn sign_up(dispatch: Arc<EventDispatcher>) -> SignUpContext {
 
     let request = ModuleRequest::new(SignUp).payload(payload);
     let user_profile = EventDispatcher::sync_send(dispatch, request)
-        .parse::<UserProfile, FlowyError>()
+        .parse::<UserProfilePB, FlowyError>()
         .unwrap()
         .unwrap();
 
@@ -152,8 +163,9 @@ pub fn sign_up(dispatch: Arc<EventDispatcher>) -> SignUpContext {
 
 pub async fn async_sign_up(dispatch: Arc<EventDispatcher>) -> SignUpContext {
     let password = login_password();
-    let payload = SignUpRequest {
-        email: random_email(),
+    let email = random_email();
+    let payload = SignUpPayloadPB {
+        email,
         name: "app flowy".to_string(),
         password: password.clone(),
     }
@@ -163,7 +175,7 @@ pub async fn async_sign_up(dispatch: Arc<EventDispatcher>) -> SignUpContext {
     let request = ModuleRequest::new(SignUp).payload(payload);
     let user_profile = EventDispatcher::async_send(dispatch.clone(), request)
         .await
-        .parse::<UserProfile, FlowyError>()
+        .parse::<UserProfilePB, FlowyError>()
         .unwrap()
         .unwrap();
 
@@ -177,8 +189,8 @@ pub async fn init_user_setting(dispatch: Arc<EventDispatcher>) {
 }
 
 #[allow(dead_code)]
-fn sign_in(dispatch: Arc<EventDispatcher>) -> UserProfile {
-    let payload = SignInRequest {
+fn sign_in(dispatch: Arc<EventDispatcher>) -> UserProfilePB {
+    let payload = SignInPayloadPB {
         email: login_email(),
         password: login_password(),
         name: "rust".to_owned(),
@@ -188,7 +200,7 @@ fn sign_in(dispatch: Arc<EventDispatcher>) -> UserProfile {
 
     let request = ModuleRequest::new(SignIn).payload(payload);
     EventDispatcher::sync_send(dispatch, request)
-        .parse::<UserProfile, FlowyError>()
+        .parse::<UserProfilePB, FlowyError>()
         .unwrap()
         .unwrap()
 }

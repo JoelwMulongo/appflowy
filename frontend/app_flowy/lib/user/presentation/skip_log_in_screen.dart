@@ -1,18 +1,17 @@
-import 'package:app_flowy/user/infrastructure/router.dart';
-import 'package:app_flowy/user/infrastructure/repos/auth_repo.dart';
+import 'package:app_flowy/user/application/auth_service.dart';
+import 'package:app_flowy/user/presentation/router.dart';
 import 'package:app_flowy/user/presentation/widgets/background.dart';
-import 'package:app_flowy/workspace/infrastructure/repos/user_repo.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flowy_infra/size.dart';
 import 'package:flowy_infra/theme.dart';
 import 'package:flowy_infra/uuid.dart';
 import 'package:flowy_infra_ui/widget/rounded_button.dart';
 import 'package:flowy_infra_ui/widget/spacing.dart';
-import 'package:flowy_log/flowy_log.dart';
+import 'package:flowy_sdk/log.dart';
 import 'package:flowy_sdk/dispatch/dispatch.dart';
-import 'package:flowy_sdk/protobuf/flowy-folder-data-model/protobuf.dart';
+import 'package:flowy_sdk/protobuf/flowy-folder/protobuf.dart';
 import 'package:flowy_sdk/protobuf/flowy-error/errors.pb.dart';
-import 'package:flowy_sdk/protobuf/flowy-user-data-model/user_profile.pb.dart';
+import 'package:flowy_sdk/protobuf/flowy-user/user_profile.pb.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -21,12 +20,12 @@ import 'package:app_flowy/generated/locale_keys.g.dart';
 
 class SkipLogInScreen extends StatefulWidget {
   final AuthRouter router;
-  final AuthRepository authRepo;
+  final AuthService authService;
 
   const SkipLogInScreen({
     Key? key,
     required this.router,
-    required this.authRepo,
+    required this.authService,
   }) : super(key: key);
 
   @override
@@ -34,8 +33,6 @@ class SkipLogInScreen extends StatefulWidget {
 }
 
 class _SkipLogInScreenState extends State<SkipLogInScreen> {
-  UserListener? userListener;
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -88,8 +85,9 @@ class _SkipLogInScreenState extends State<SkipLogInScreen> {
   }
 
   _launchURL(String url) async {
-    if (await canLaunch(url)) {
-      await launch(url);
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
     } else {
       throw 'Could not launch $url';
     }
@@ -99,7 +97,7 @@ class _SkipLogInScreenState extends State<SkipLogInScreen> {
     const password = "AppFlowy123@";
     final uid = uuid();
     final userEmail = "$uid@appflowy.io";
-    final result = await widget.authRepo.signUp(
+    final result = await widget.authService.signUp(
       name: LocaleKeys.defaultUsername.tr(),
       password: password,
       email: userEmail,
@@ -118,8 +116,8 @@ class _SkipLogInScreenState extends State<SkipLogInScreen> {
 
   void _openCurrentWorkspace(
     BuildContext context,
-    UserProfile user,
-    dartz.Either<CurrentWorkspaceSetting, FlowyError> workspacesOrError,
+    UserProfilePB user,
+    dartz.Either<CurrentWorkspaceSettingPB, FlowyError> workspacesOrError,
   ) {
     workspacesOrError.fold(
       (workspaceSetting) {
